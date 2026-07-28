@@ -29,6 +29,302 @@ body {
   font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ---------- Motion vocabulary (cinematic upgrade) ---------- */
+
+/* Tactile press on every interactive control */
+button {
+  transition:
+    transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 150ms;
+}
+button:not(:disabled):active {
+  transform: scale(0.98);
+}
+button:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+/* CTA gradient shimmer — background drifts, never a cheesy pulse */
+.shimmer {
+  background-size: 200% 100%;
+  animation: shimmer-slide 3.5s ease-in-out infinite;
+}
+@keyframes shimmer-slide {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Gentle idle float (photo-page buttons). Offset twin so pairs desync. */
+.float-idle {
+  animation: float-y 3s ease-in-out infinite;
+}
+.float-idle-offset {
+  animation: float-y 3s ease-in-out 1.5s infinite;
+}
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* Streak flame flicker */
+.flame-flicker {
+  display: inline-block;
+  animation: flame 1.6s ease-in-out infinite;
+  transform-origin: 50% 90%;
+}
+@keyframes flame {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.08) rotate(-2deg);
+  }
+  60% {
+    transform: scale(0.96) rotate(2deg);
+  }
+}
+
+/* Three-dot waiting loader */
+.dots span {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 2px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Leaderboard own-row glow */
+.glow-pulse {
+  animation: glow 2.4s ease-in-out infinite;
+}
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(5, 177, 222, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px 0 rgba(5, 177, 222, 0.25);
+  }
+}
+
+/* Focus underline that grows from center (join form fields) */
+.field-wrap {
+  position: relative;
+}
+.field-wrap::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #05b1de, #b585f0);
+  transform: scaleX(0);
+  transition: transform 300ms cubic-bezier(0, 0, 0.2, 1);
+}
+.field-wrap:focus-within::after {
+  transform: scaleX(1);
+}
+
+/* "YOU'RE IN THE ROOM" letter-spacing settle */
+.letter-settle {
+  animation: letter-settle 0.9s cubic-bezier(0, 0, 0.2, 1) both;
+}
+@keyframes letter-settle {
+  from {
+    letter-spacing: 0.5em;
+    opacity: 0;
+  }
+  to {
+    letter-spacing: 0.2em;
+    opacity: 1;
+  }
+}
+
+/* Quiz time-critical red vignette (opacity animated, gradient static) */
+.vignette-critical {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(255, 75, 75, 0.28) 100%
+  );
+  animation: vignette-pulse 1s ease-in-out infinite;
+}
+@keyframes vignette-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* One-time horizontal shake for a field's first validation error */
+.shake-once {
+  animation: shake-x 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes shake-x {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+/* Gradient sweeps across a button when it becomes enabled */
+.sweep-in {
+  background-size: 200% 100%;
+  animation: sweep-in 0.4s cubic-bezier(0, 0, 0.2, 1) both;
+}
+@keyframes sweep-in {
+  from {
+    background-position: 120% 50%;
+  }
+  to {
+    background-position: 0% 50%;
+  }
+}
+
+/* Waiting-room orbit system: rings spin, items counter-spin to stay upright */
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.orbit-ring-slow {
+  animation: orbit-spin 70s linear infinite;
+}
+.orbit-ring-slower {
+  animation: orbit-spin 100s linear infinite reverse;
+}
+.orbit-upright-slow {
+  animation: orbit-spin 70s linear infinite reverse;
+}
+.orbit-upright-slower {
+  animation: orbit-spin 100s linear infinite;
+}
+
+/* Sonar pulse radiating from the center avatar */
+.sonar-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(5, 177, 222, 0.45);
+  animation: sonar 3.2s ease-out infinite;
+  pointer-events: none;
+}
+.sonar-ring:nth-child(2) {
+  animation-delay: 1.6s;
+}
+@keyframes sonar {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: kill every decorative CSS animation, keep end states */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer,
+  .float-idle,
+  .float-idle-offset,
+  .flame-flicker,
+  .glow-pulse,
+  .vignette-critical,
+  .letter-settle,
+  .shake-once,
+  .sweep-in,
+  .orbit-ring-slow,
+  .orbit-ring-slower,
+  .orbit-upright-slow,
+  .orbit-upright-slower,
+  .sonar-ring,
+  .confetti-piece {
+    animation: none !important;
+  }
+  .sonar-ring {
+    display: none;
+  }
+  .letter-settle {
+    opacity: 1;
+    letter-spacing: 0.2em;
+  }
+}
+
+/* Winner confetti — pieces fall and spin from above the viewport */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-5vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(720deg);
+    opacity: 0.6;
+  }
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  border-radius: 2px;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  pointer-events: none;
+}
+
 /* Subtle grid backdrop used across the app */
 .bg-grid {
   background-image: linear-gradient(

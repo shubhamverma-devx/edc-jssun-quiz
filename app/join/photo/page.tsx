@@ -2,37 +2,36 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "@/lib/m";
 import ProgressSteps from "@/components/progress-steps";
 import { uploadToCloudinary } from "@/lib/cloudinary/upload";
 import { getOrCreateDeviceId } from "@/lib/device-id";
+import { fadeDown, fadeUp, staggerParent, useEntranceInitial } from "@/lib/motion";
 
-type Stage =
-  | "choose"
-  | "camera"
-  | "preview"
-  | "uploading"
-  | "no-session"
-  | "error";
+type Stage = "choose" | "preview" | "uploading" | "no-session" | "error";
+
+const RING_R = 30;
+const RING_C = 2 * Math.PI * RING_R;
 
 export default function JoinPhotoPage() {
   const router = useRouter();
+  const entrance = useEntranceInitial();
   const [name, setName] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("choose");
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [cameraNote, setCameraNote] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Must have a name from step 1.
+  // Must have name + contact info from step 1.
   useEffect(() => {
     const stored = sessionStorage.getItem("edc-quiz-name");
-    if (!stored) {
+    const email = sessionStorage.getItem("edc-quiz-email");
+    const phone = sessionStorage.getItem("edc-quiz-phone");
+    if (!stored || !email || !phone) {
       router.replace("/join");
       return;
     }
@@ -42,84 +41,26 @@ export default function JoinPhotoPage() {
     setName(stored);
   }, [router]);
 
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-  }, []);
-
-  // Clean up camera + object URLs on unmount.
+  // Clean up the preview object URL on unmount.
   useEffect(() => {
     return () => {
-      stopCamera();
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function openCamera() {
-    setCameraNote(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      });
-      streamRef.current = stream;
-      setStage("camera");
-      // Video element mounts on the next render.
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-      });
-    } catch {
-      setCameraNote("Camera unavailable — use Upload instead.");
-    }
-  }
-
-  function capturePhoto() {
-    const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
-
-    // Center-crop a square from the video frame.
-    const side = Math.min(video.videoWidth, video.videoHeight);
-    const sx = (video.videoWidth - side) / 2;
-    const sy = (video.videoHeight - side) / 2;
-
-    const canvas = document.createElement("canvas");
-    const size = Math.min(side, 800);
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, sx, sy, side, side, 0, 0, size, size);
-
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        stopCamera();
-        setPhotoBlob(blob);
-      },
-      "image/jpeg",
-      0.9
-    );
-  }
-
-  function setPhotoBlob(blob: Blob) {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPhoto(blob);
-    setPreviewUrl(URL.createObjectURL(blob));
-    setStage("preview");
-  }
-
   function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) setPhotoBlob(file);
+    if (file) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPhoto(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setStage("preview");
+    }
     e.target.value = "";
   }
 
   function retake() {
-    stopCamera();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPhoto(null);
     setPreviewUrl(null);
@@ -143,6 +84,8 @@ export default function JoinPhotoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
+          email: sessionStorage.getItem("edc-quiz-email"),
+          phone: sessionStorage.getItem("edc-quiz-phone"),
           photoUrl: uploaded.secureUrl,
           photoPublicId: uploaded.publicId,
           deviceId: getOrCreateDeviceId(),
@@ -151,6 +94,11 @@ export default function JoinPhotoPage() {
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.participantId) {
+        // Fresh identity → fresh scoreboard (clears any stale score/streak
+        // left in this tab from a previous session).
+        for (const key of ["edc-quiz-score", "edc-quiz-streak", "edc-quiz-feedback"]) {
+          sessionStorage.removeItem(key);
+        }
         sessionStorage.setItem("edc-quiz-participant-id", data.participantId);
         sessionStorage.setItem("edc-quiz-session-id", data.sessionId);
         router.push("/waiting");
@@ -172,7 +120,12 @@ export default function JoinPhotoPage() {
   return (
     <main className="bg-grid flex-1">
       <div className="mx-auto flex min-h-dvh w-full max-w-[400px] flex-col px-5 pb-10 pt-6">
-        <header className="flex items-center gap-4">
+        <motion.header
+          variants={fadeDown}
+          initial={entrance}
+          animate="show"
+          className="flex items-center gap-4"
+        >
           <Link
             href="/join"
             aria-label="Back to name entry"
@@ -183,41 +136,44 @@ export default function JoinPhotoPage() {
           <div className="flex-1">
             <ProgressSteps current={2} />
           </div>
-        </header>
+        </motion.header>
 
-        <div className="flex flex-1 flex-col pt-12">
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
+        <motion.div
+          variants={staggerParent(0.08, 0.05)}
+          initial={entrance}
+          animate="show"
+          className="flex flex-1 flex-col pt-12"
+        >
+          <motion.h1
+            variants={fadeUp}
+            className="text-[28px] font-extrabold leading-tight tracking-tight"
+          >
             Add your photo
-          </h1>
-          <p className="mt-2 text-[13px] text-foreground/55">
+          </motion.h1>
+          <motion.p variants={fadeUp} className="mt-2 text-[13px] text-foreground/55">
             Goes on the smart-board wall as you join.
-          </p>
+          </motion.p>
 
           {stage === "choose" && (
             <>
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={openCamera}
-                  className="rounded-card border border-brand-cyan/40 bg-brand-cyan/10 py-6 text-center text-[14px] font-bold text-brand-cyan transition-colors hover:bg-brand-cyan/15"
-                >
-                  📷
-                  <span className="mt-2 block">Take photo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-card border border-brand-purple/40 bg-brand-purple/10 py-6 text-center text-[14px] font-bold text-brand-purple transition-colors hover:bg-brand-purple/15"
-                >
-                  🖼️
-                  <span className="mt-2 block">Upload</span>
-                </button>
-              </div>
-              {cameraNote && (
-                <p className="mt-4 text-center text-[12px] text-award">
-                  {cameraNote}
-                </p>
-              )}
+              {/* One button, one native sheet: iOS/Android offer
+                  Take Photo · Photo Library · Choose File themselves.
+                  NO capture attribute — on iOS Safari it forces the
+                  camera directly and skips the sheet entirely. */}
+              <motion.button
+                variants={fadeUp}
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="float-idle mt-8 rounded-card border border-brand-cyan/40 bg-brand-cyan/10 py-8 text-center transition-colors hover:bg-brand-cyan/15"
+              >
+                <span className="text-2xl">📸</span>
+                <span className="mt-2 block text-[16px] font-bold text-brand-cyan">
+                  Add photo
+                </span>
+                <span className="mt-1 block text-[12px] font-medium text-foreground/45">
+                  Camera · Gallery · Files
+                </span>
+              </motion.button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -228,39 +184,14 @@ export default function JoinPhotoPage() {
             </>
           )}
 
-          {stage === "camera" && (
-            <div className="mt-8 flex flex-col items-center">
-              <div className="aspect-square w-full overflow-hidden rounded-card border border-border-soft bg-black">
-                {/* Live camera feed, mirrored like a selfie */}
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  className="h-full w-full -scale-x-100 object-cover"
-                />
-              </div>
-              <div className="mt-5 grid w-full grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={retake}
-                  className="rounded-card border border-border-soft bg-surface py-3.5 text-[14px] font-semibold text-foreground/70"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={capturePhoto}
-                  className="rounded-card bg-gradient-to-r from-brand-cyan to-brand-purple py-3.5 text-[14px] font-bold text-background"
-                >
-                  Capture
-                </button>
-              </div>
-            </div>
-          )}
-
           {(stage === "preview" || stage === "uploading") && previewUrl && (
-            <div className="mt-8 flex flex-col items-center">
-              <div className="aspect-square w-full overflow-hidden rounded-card border border-border-soft">
+            <motion.div
+              initial={{ opacity: 0, scale: 1.06 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+              className="mt-8 flex flex-col items-center"
+            >
+              <div className="relative aspect-square w-full overflow-hidden rounded-card border border-border-soft">
                 {/* Local object URL — next/image not applicable */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -268,39 +199,57 @@ export default function JoinPhotoPage() {
                   alt="Your photo preview"
                   className="h-full w-full object-cover"
                 />
+                {/* Upload progress: circular ring over the dimmed photo */}
+                {stage === "uploading" && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="absolute inset-0 flex flex-col items-center justify-center bg-background/60 backdrop-blur-[2px]"
+                  >
+                    <svg viewBox="0 0 72 72" className="h-20 w-20 -rotate-90">
+                      <circle cx="36" cy="36" r={RING_R} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="5" />
+                      <circle
+                        cx="36"
+                        cy="36"
+                        r={RING_R}
+                        fill="none"
+                        stroke="#05b1de"
+                        strokeWidth="5"
+                        strokeLinecap="round"
+                        strokeDasharray={RING_C}
+                        strokeDashoffset={RING_C * (1 - progress)}
+                        style={{ transition: "stroke-dashoffset 200ms linear" }}
+                      />
+                    </svg>
+                    <p className="mt-3 text-[13px] font-semibold text-foreground/80">
+                      Uploading…
+                    </p>
+                  </motion.div>
+                )}
               </div>
 
-              {stage === "preview" ? (
+              {stage === "preview" && (
                 <div className="mt-5 grid w-full grid-cols-2 gap-3">
-                  <button
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
                     type="button"
                     onClick={retake}
                     className="rounded-card border border-border-soft bg-surface py-3.5 text-[14px] font-semibold text-foreground/70"
                   >
                     Retake
-                  </button>
+                  </motion.button>
                   <button
                     type="button"
                     onClick={handleContinue}
-                    className="rounded-card bg-gradient-to-r from-brand-cyan to-brand-purple py-3.5 text-[14px] font-bold text-background"
+                    className="sweep-in rounded-card bg-gradient-to-r from-brand-cyan to-brand-purple py-3.5 text-[14px] font-bold text-background"
                   >
                     Continue →
                   </button>
                 </div>
-              ) : (
-                <div className="mt-5 w-full">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-brand-cyan to-brand-purple transition-[width] duration-200"
-                      style={{ width: `${Math.round(progress * 100)}%` }}
-                    />
-                  </div>
-                  <p className="mt-3 text-center text-[13px] font-medium text-foreground/60">
-                    Uploading…
-                  </p>
-                </div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {stage === "no-session" && (
@@ -347,7 +296,7 @@ export default function JoinPhotoPage() {
               </div>
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
     </main>
   );

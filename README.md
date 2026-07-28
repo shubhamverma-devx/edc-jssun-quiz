@@ -207,14 +207,20 @@ erDiagram
 
 ### Student flow
 
-Steps 1–4 are live and verified end-to-end on iOS Simulator (Safari) and Android Emulator (Chrome), including cross-device Realtime updates in the waiting room:
+The full journey is live, verified end-to-end on iOS Simulator (Safari) and Android Emulator (Chrome), including cross-device Realtime:
 
 1. Land on `/` — see the pitch and the top-3 prize
-2. Tap **Get started** → `/join` — enter a name (step 1 of 3; input is hardened for mobile keyboards, IME/transliteration, and iOS autofill)
-3. `/join/photo` — take a webcam photo or upload one (step 2 of 3); the photo goes browser → Cloudinary directly via a signed upload, then the app creates the participant row for the current live session (reconnects to the existing row if the same device rejoins)
-4. `/waiting` — waiting room (step 3 of 3): your avatar + name, a live participant counter, and a "just joined" photo collage that grows in real time via Supabase Realtime as others join from their own devices
-5. When the host advances the session, everyone is routed to `/quiz` — speed and streaks affect points *(Phase 3, upcoming)*
-6. See final score and rank on `/result`; top 3 get the interview callout *(Phase 3, upcoming)*
+2. Tap **Get started** → `/join` — enter your name, email, and phone (top-3 finishers are contacted for the interview; inputs hardened for mobile keyboards, IME/transliteration, and iOS autofill)
+3. `/join/photo` — webcam or upload; browser → Cloudinary signed upload, then participant creation with device-based reconnect
+4. `/waiting` — a live lobby: joined freshers orbit your avatar in a slowly rotating constellation, sonar pulses radiate from your photo, a hype ticker rotates tips and prizes, and every new join lands with a name callout and a counter punch — all realtime; hands off to the quiz automatically when the host starts
+5. `/quiz` — answer under a color-shifting countdown ring; MCQ (text or image options), True/False, and image-identify questions; lock in your answer, or the timer auto-submits. Scoring is fully server-side: 100 base + up to 50 speed bonus + streak bonus (caps at +50). After each question: instant feedback with a points breakdown and explanation, then a between-question leaderboard
+6. `/result` — final rank, score, accuracy, max streak, and average response time. Top 3 get the winner treatment: confetti, gold styling, and interview-entry instructions; everyone can share their score
+
+**Anti-cheat**: correct answers and explanations never appear in any API response until after an answer is locked in; response timing is validated server-side; one answer per participant per question is enforced by a database constraint.
+
+**Motion design**: every step is choreographed — staggered page entrances, an ambient animated landing, the living waiting-room lobby, a dramatic answer-reveal beat, and a full winner celebration (confetti burst, gold treatment) for the top 3. All animations respect `prefers-reduced-motion` and degrade to instant states, and first page loads always render immediately (entrances only play on in-app navigation).
+
+**Resilience**: if a participant record disappears (e.g. an admin data reset), the app detects it early, clears the stale local identity, and routes the student back through the join flow instead of failing mid-quiz.
 
 ### Admin flow
 

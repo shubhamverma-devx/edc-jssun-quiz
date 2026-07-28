@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CLOUDINARY_URL_PREFIX = "https://res.cloudinary.com/";
+// Intentionally basic — we only reject obvious typos, not enforce RFC 5322.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+const PHONE_RE = /^[+]?[0-9\-\s]{10,20}$/;
 
 /**
  * Creates (or reconnects) a participant for the current live session.
@@ -15,14 +18,34 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
   const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim() : "";
+  const phoneRaw = typeof body?.phone === "string" ? body.phone.trim() : "";
   const photoUrl = typeof body?.photoUrl === "string" ? body.photoUrl : "";
   const photoPublicId =
     typeof body?.photoPublicId === "string" ? body.photoPublicId.trim() : "";
   const deviceId = typeof body?.deviceId === "string" ? body.deviceId : "";
 
   if (name.length < 1 || name.length > 60) {
-    return NextResponse.json({ error: "invalid_name" }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid_input", field: "name" },
+      { status: 400 }
+    );
   }
+  if (!EMAIL_RE.test(email) || email.length > 254) {
+    return NextResponse.json(
+      { error: "invalid_input", field: "email" },
+      { status: 400 }
+    );
+  }
+  if (!PHONE_RE.test(phoneRaw)) {
+    return NextResponse.json(
+      { error: "invalid_input", field: "phone" },
+      { status: 400 }
+    );
+  }
+  // Normalize: strip spaces/dashes, keep a leading + — consistent storage
+  // makes contacting winners later painless.
+  const phone = phoneRaw.replace(/[\s-]/g, "");
   if (!photoUrl.startsWith(CLOUDINARY_URL_PREFIX)) {
     return NextResponse.json({ error: "invalid_photo_url" }, { status: 400 });
   }
@@ -63,6 +86,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "lookup_failed" }, { status: 500 });
   }
   if (existing) {
+    // Reconnect: refresh contact info in case the user corrected a typo.
+    await supabase
+      .from("participants")
+      .update({ email, phone, last_active_at: new Date().toISOString() })
+      .eq("id", existing.id);
     return NextResponse.json({
       participantId: existing.id,
       sessionId: session.id,
@@ -75,6 +103,8 @@ export async function POST(request: Request) {
     .insert({
       session_id: session.id,
       name,
+      email,
+      phone,
       photo_url: photoUrl,
       photo_public_id: photoPublicId,
       device_id: deviceId,

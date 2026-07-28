@@ -3,68 +3,149 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "@/lib/m";
 import ProgressSteps from "@/components/progress-steps";
+import { fadeDown, fadeUp, staggerParent, useEntranceInitial } from "@/lib/motion";
+
+// Intentionally basic — reject obvious typos only, not enforce RFC 5322.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+const PHONE_RE = /^[+]?[0-9\-\s]{10,20}$/;
+
+type Field = "name" | "email" | "phone";
+
+const isValid: Record<Field, (v: string) => boolean> = {
+  name: (v) => v.trim().length >= 2 && v.trim().length <= 60,
+  email: (v) => EMAIL_RE.test(v.trim()) && v.trim().length <= 254,
+  phone: (v) => PHONE_RE.test(v.trim()),
+};
+
+const ERROR_TEXT: Record<Field, string> = {
+  name: "Enter at least 2 characters",
+  email: "Enter a valid email",
+  phone: "Enter a valid phone number",
+};
+
+function ErrorMsg({ field, show }: { field: Field; show: boolean }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.p
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="mt-1.5 text-[12px] text-red-400"
+        >
+          {ERROR_TEXT[field]}
+        </motion.p>
+      )}
+    </AnimatePresence>
+  );
+}
 
 export default function JoinPage() {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState("");
-  const [isComposing, setIsComposing] = useState(false);
-  const canContinue = name.trim().length >= 2;
+  const entrance = useEntranceInitial();
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
 
-  // Native-event fallback + polling reconciler. Two failure modes covered:
-  // 1. Mobile keyboards (predictive text, transliteration/IME) that don't
-  //    fire React's synthetic events per keystroke → native listeners.
-  // 2. iOS Safari autofill injects text via DOM manipulation WITHOUT firing
-  //    any input/change/keyup event at all → a 200ms poll reconciles the
-  //    DOM value into state (no-op re-render-wise when values match).
+  const [values, setValues] = useState<Record<Field, string>>({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [touched, setTouched] = useState<Record<Field, boolean>>({
+    name: false,
+    email: false,
+    phone: false,
+  });
+  const [isComposing, setIsComposing] = useState(false);
+
+  const canContinue = (Object.keys(isValid) as Field[]).every((f) =>
+    isValid[f](values[f])
+  );
+
+  // Native-event fallback + polling reconciler on ALL fields. Two failure
+  // modes covered: mobile keyboards that skip React's synthetic events, and
+  // silent DOM writes from autofill (iOS "Autofill Contact" fills email +
+  // phone together with zero events). 200ms poll reconciles both.
   useEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
+    const els = [nameRef.current, emailRef.current, phoneRef.current];
+    if (els.some((el) => !el)) return;
 
     const sync = () => {
-      const domValue = el.value;
-      setName((prev) => (prev === domValue ? prev : domValue));
+      const next = {
+        name: nameRef.current?.value ?? "",
+        email: emailRef.current?.value ?? "",
+        phone: phoneRef.current?.value ?? "",
+      };
+      setValues((prev) =>
+        prev.name === next.name &&
+        prev.email === next.email &&
+        prev.phone === next.phone
+          ? prev
+          : next
+      );
     };
 
-    el.addEventListener("input", sync);
-    el.addEventListener("change", sync);
-    el.addEventListener("keyup", sync);
-    // Autofill often fires focus without any input event.
-    el.addEventListener("focus", sync);
-    el.addEventListener("blur", sync);
-
-    // Catches autofill and any other silent DOM writes within 200ms.
+    const events = ["input", "change", "keyup", "focus", "blur"];
+    for (const el of els)
+      for (const ev of events) el!.addEventListener(ev, sync);
     const pollId = window.setInterval(sync, 200);
-
-    // Field may already be prefilled at mount (autofill can beat hydration).
-    sync();
+    sync(); // fields may be prefilled before hydration
 
     return () => {
-      el.removeEventListener("input", sync);
-      el.removeEventListener("change", sync);
-      el.removeEventListener("keyup", sync);
-      el.removeEventListener("focus", sync);
-      el.removeEventListener("blur", sync);
+      for (const el of els)
+        for (const ev of events) el?.removeEventListener(ev, sync);
       window.clearInterval(pollId);
     };
   }, []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Don't submit mid-IME-composition — the name may be half-composed.
     if (isComposing) return;
-    // Read the DOM value directly as the last word, in case state lagged.
-    const value = (inputRef.current?.value ?? name).trim();
-    if (value.length < 2) return;
-    sessionStorage.setItem("edc-quiz-name", value);
+    // The DOM is the source of truth — read refs directly, then re-validate.
+    const finalValues = {
+      name: (nameRef.current?.value ?? "").trim(),
+      email: (emailRef.current?.value ?? "").trim(),
+      phone: (phoneRef.current?.value ?? "").trim(),
+    };
+    setTouched({ name: true, email: true, phone: true });
+    if (!(Object.keys(isValid) as Field[]).every((f) => isValid[f](finalValues[f])))
+      return;
+
+    sessionStorage.setItem("edc-quiz-name", finalValues.name);
+    sessionStorage.setItem("edc-quiz-email", finalValues.email);
+    sessionStorage.setItem("edc-quiz-phone", finalValues.phone);
     router.push("/join/photo");
   }
+
+  function fieldClasses(field: Field) {
+    const showError =
+      touched[field] && values[field].trim() !== "" && !isValid[field](values[field]);
+    return {
+      input: `w-full rounded-card border bg-surface px-4 py-4 text-[16px] font-medium text-foreground placeholder:text-foreground/30 outline-none transition-[border-color,box-shadow] duration-200 ${
+        showError
+          ? "border-red-500/60 focus:border-red-500 focus:shadow-[0_0_0_3px_rgba(255,75,75,0.12)]"
+          : "border-border-soft focus:border-brand-cyan/60 focus:shadow-[0_0_0_3px_rgba(5,177,222,0.13)]"
+      }`,
+      showError,
+    };
+  }
+
+  const markTouched = (field: Field) => () =>
+    setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
 
   return (
     <main className="bg-grid flex-1">
       <div className="mx-auto flex min-h-dvh w-full max-w-[400px] flex-col px-5 pb-10 pt-6">
-        <header className="flex items-center gap-4">
+        <motion.header
+          variants={fadeDown}
+          initial={entrance}
+          animate="show"
+          className="flex items-center gap-4"
+        >
           <Link
             href="/"
             aria-label="Back to home"
@@ -75,53 +156,108 @@ export default function JoinPage() {
           <div className="flex-1">
             <ProgressSteps current={1} />
           </div>
-        </header>
+        </motion.header>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col pt-12">
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
-            What should we call you?
-          </h1>
-          <p className="mt-2 text-[13px] text-foreground/55">
-            This name shows up on the leaderboard.
-          </p>
+        <motion.form
+          variants={staggerParent(0.08, 0.1)}
+          initial={entrance}
+          animate="show"
+          onSubmit={handleSubmit}
+          className="flex flex-1 flex-col pt-10"
+        >
+          <motion.h1
+            variants={fadeUp}
+            className="text-[28px] font-extrabold leading-tight tracking-tight"
+          >
+            Let&apos;s get you in
+          </motion.h1>
+          <motion.p
+            variants={fadeUp}
+            className="mt-2 text-[13px] leading-relaxed text-foreground/55"
+          >
+            We&apos;ll only use email/phone to reach top-3 winners about the
+            interview.
+          </motion.p>
 
-          {/* Mobile keyboards (predictive text, IME/transliteration) don't
-              always fire React's onChange per keystroke — handle onInput and
-              composition events too so Continue activates while typing. */}
-          <input
-            ref={inputRef}
-            autoFocus
-            type="text"
-            value={name}
-            maxLength={60}
-            placeholder="Your name"
-            name="display-name"
-            autoComplete="off"
-            autoCapitalize="words"
-            autoCorrect="off"
-            spellCheck={false}
-            inputMode="text"
-            enterKeyHint="next"
-            onChange={(e) => setName(e.currentTarget.value)}
-            onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={(e) => {
-              setIsComposing(false);
-              setName((e.currentTarget as HTMLInputElement).value);
-            }}
-            className="mt-8 w-full rounded-card border border-border-soft bg-surface px-4 py-4 text-[16px] font-medium text-foreground placeholder:text-foreground/30 outline-none transition-colors focus:border-brand-cyan/60"
-          />
+          <div className="mt-7 space-y-4">
+            <motion.div
+              variants={fadeUp}
+              className={`field-wrap ${fieldClasses("name").showError ? "shake-once" : ""}`}
+            >
+              <input
+                ref={nameRef}
+                autoFocus
+                type="text"
+                maxLength={60}
+                placeholder="Your name"
+                name="display-name"
+                autoComplete="off"
+                autoCapitalize="words"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="text"
+                enterKeyHint="next"
+                onBlur={markTouched("name")}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                className={fieldClasses("name").input}
+              />
+              <ErrorMsg field="name" show={fieldClasses("name").showError} />
+            </motion.div>
 
-          <div className="mt-auto pt-10">
+            <motion.div
+              variants={fadeUp}
+              className={`field-wrap ${fieldClasses("email").showError ? "shake-once" : ""}`}
+            >
+              {/* Autofill is WANTED here — do not set autoComplete="off" */}
+              <input
+                ref={emailRef}
+                type="email"
+                maxLength={254}
+                placeholder="you@example.com"
+                autoComplete="email"
+                inputMode="email"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="next"
+                onBlur={markTouched("email")}
+                className={fieldClasses("email").input}
+              />
+              <ErrorMsg field="email" show={fieldClasses("email").showError} />
+            </motion.div>
+
+            <motion.div
+              variants={fadeUp}
+              className={`field-wrap ${fieldClasses("phone").showError ? "shake-once" : ""}`}
+            >
+              <input
+                ref={phoneRef}
+                type="tel"
+                maxLength={20}
+                placeholder="+91 98765 43210"
+                autoComplete="tel"
+                inputMode="tel"
+                enterKeyHint="done"
+                onBlur={markTouched("phone")}
+                className={fieldClasses("phone").input}
+              />
+              <ErrorMsg field="phone" show={fieldClasses("phone").showError} />
+            </motion.div>
+          </div>
+
+          <motion.div variants={fadeUp} className="mt-auto pt-10">
             <button
               type="submit"
               disabled={!canContinue}
-              className="block w-full rounded-card bg-gradient-to-r from-brand-cyan to-brand-purple py-4 text-center text-[15px] font-bold text-background transition-opacity enabled:hover:opacity-90 disabled:opacity-30"
+              className={`block w-full rounded-card bg-gradient-to-r from-brand-cyan to-brand-purple py-4 text-center text-[15px] font-bold text-background transition-opacity disabled:opacity-30 ${
+                canContinue ? "sweep-in" : ""
+              }`}
             >
               Continue →
             </button>
-          </div>
-        </form>
+          </motion.div>
+        </motion.form>
       </div>
     </main>
   );
