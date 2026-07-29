@@ -252,6 +252,77 @@ button:not(:disabled):hover {
   animation: orbit-spin 100s linear infinite;
 }
 
+/* Board lobby "gravity well" pieces */
+.core-breathe {
+  animation: core-breathe 7s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes core-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+.text-hollow {
+  color: transparent;
+  -webkit-text-stroke: 2.5px rgba(244, 245, 247, 0.9);
+}
+
+.cursor-blink {
+  animation: cursor-blink 1.1s steps(1) infinite;
+}
+@keyframes cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.ticket-float {
+  animation: ticket-float 5s ease-in-out infinite;
+}
+@keyframes ticket-float {
+  0%,
+  100% {
+    transform: rotate(-3deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-8px);
+  }
+}
+
+/* Slow aurora sweep behind the board — one rotating conic gradient */
+.aurora {
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    rgba(5, 177, 222, 0.055) 18%,
+    transparent 36%,
+    rgba(181, 133, 240, 0.05) 58%,
+    transparent 78%,
+    rgba(5, 177, 222, 0.035) 92%,
+    transparent 100%
+  );
+  animation: aurora-rotate 75s linear infinite;
+  will-change: transform;
+}
+@keyframes aurora-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Sonar pulse radiating from the center avatar */
 .sonar-ring {
   position: absolute;
@@ -291,6 +362,7 @@ button:not(:disabled):hover {
   .orbit-upright-slow,
   .orbit-upright-slower,
   .sonar-ring,
+  .aurora,
   .confetti-piece {
     animation: none !important;
   }

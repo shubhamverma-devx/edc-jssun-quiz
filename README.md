@@ -64,7 +64,7 @@ values (
 Also make sure Realtime is broadcasting the tables the waiting room listens to (Dashboard → Database → Replication → `supabase_realtime`, or run):
 
 ```sql
-alter publication supabase_realtime add table participants, sessions;
+alter publication supabase_realtime add table participants, sessions, answers;
 ```
 
 ### Testing on mobile / other devices on the network
@@ -105,11 +105,19 @@ edc-jssun-quiz/
 │   ├── globals.css       # Tailwind v4 tokens (brand-cyan, brand-purple, award)
 │   ├── join/             # Step 1: name entry · photo/: step 2 capture/upload
 │   ├── waiting/          # Step 3: realtime waiting room
+│   ├── quiz/             # Quiz play + feedback/ + interstitial/
+│   ├── result/           # Final stats + top-3 winner celebration
+│   ├── board/[sessionId]/# Smart-board projection (five realtime states)
 │   └── api/
 │       ├── uploads/sign/         # Cloudinary signed-upload endpoint
-│       └── participants/create/  # Participant create/reconnect endpoint
+│       ├── participants/create/  # Participant create/reconnect endpoint
+│       ├── answers/submit/       # Server-side scoring (anti-cheat)
+│       ├── quiz/                 # current/ + leaderboard/
+│       └── board/                # question/ + distribution/ (board-only)
 ├── components/
-│   └── progress-steps.tsx# Join-flow progress bar
+│   ├── progress-steps.tsx# Join-flow progress bar
+│   └── board/            # Board views: Lobby, Question, Reveal,
+│                         #   Interstitial, Winners + ambient + starfield
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts     # Browser client (anon key)
@@ -118,6 +126,8 @@ edc-jssun-quiz/
 │   │   └── admin.ts      # Service-role client (server-only)
 │   ├── cloudinary/
 │   │   └── upload.ts     # Browser → Cloudinary direct upload (signed)
+│   ├── board/            # state.ts (board state machine) + sound.ts (WebAudio)
+│   ├── m.ts / motion.ts  # Motion system: single framer entry + shared vocabulary
 │   └── device-id.ts      # Per-device UUID for reconnect
 ├── proxy.ts              # Next.js 16 proxy — session refresh + /admin guard
 ├── .env.example          # Env template (safe to commit)
@@ -231,13 +241,21 @@ The full journey is live, verified end-to-end on iOS Simulator (Safari) and Andr
 5. Control pacing question by question, watch the live leaderboard
 6. End the session and export/announce results
 
-### Smart board flow
+### Smart board flow (live)
 
-1. Open `/board/[session_id]` on the auditorium display
-2. Board idles on branding until the session goes live
-3. Each question projects with a countdown; answers lock when time's up
-4. Leaderboard shows between questions
-5. Final winners screen crowns the top 3 (amber highlight)
+**To project:** open `https://<your-url>/board/<session-id>` in Chrome on the auditorium machine, click **⛶ Fullscreen** and **🔊 Sound** (bottom-left operator pills), done. The board composes on a fixed 1920×1080 stage and scales itself to any window, projector, or TV — laptop preview, 1366×768 smart board, or 4K all render the identical composition.
+
+The board is read-only and driven entirely by Supabase Realtime, moving through five states on its own:
+
+1. **Lobby — "Gravity Well"** — a canvas starfield drifts on three parallax layers while the live participant count burns at the center as a breathing core with a spinning halo arc; every fresher who joins is captured into one of three orbit rings with a ripple-and-flare celebration, the count punches, and a ticker calls out their name. Beside it: the hero pitch and a glass QR card for joining.
+2. **Question** — question text at 84px, letter-led options with alternating accents, a full-width shared drift-free timer with a punching countdown, and live answer-distribution bars that fill as phones lock in
+3. **Reveal** — a black beat, a cyan radial flash, the correct answer called out with the final distribution (wrong options dimmed), the explanation, and a "fastest correct" chip
+4. **Interstitial** — gold top-5 standings with staggered entrances and score count-ups
+5. **Winners** — the closer: 3rd, 2nd, then 1st revealed on separate beats with glow blooms, a rotating spotlight on 1st, tripled confetti plus a particle burst, and the closing interview line
+
+The board reaches Reveal on its own when the timer expires *or* everyone has answered; it returns to Question whenever the host advances.
+
+**Sound** is fully synthesized in the browser with WebAudio — no audio files. Ambient pads in the lobby and winners, join blips, a question riser, countdown ticks in the last five seconds, a reveal stinger, and a winners fanfare. It stays silent until the operator clicks the Sound pill (browser autoplay policy requires the gesture).
 
 ## Deployment
 
