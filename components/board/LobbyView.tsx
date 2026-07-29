@@ -35,9 +35,17 @@ export default function LobbyView({ state }: { state: LobbyState }) {
   const countPlayed = useRef(false);
   const prevCount = useRef(0);
 
-  // QR from the board's own origin. TODO: NEXT_PUBLIC_SITE_URL once final.
+  // Join URL: prefer NEXT_PUBLIC_SITE_URL (production), fall back to the
+  // board's own origin (dev / env not yet configured). NEXT_PUBLIC_ vars
+  // are inlined at build time, so this is safe in a client component.
   useEffect(() => {
-    const url = `${window.location.origin}/join`;
+    const envUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const base =
+      envUrl && !envUrl.includes("placeholder") && !envUrl.includes("localhost")
+        ? envUrl
+        : window.location.origin;
+    // QR sends freshers to the landing page root — one tap to Get started.
+    const url = base.replace(/\/+$/, "");
     // window is client-only — can't be a useState initializer under SSR.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setJoinUrl(url.replace(/^https?:\/\//, ""));
