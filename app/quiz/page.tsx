@@ -158,22 +158,9 @@ export default function QuizPage() {
         if (res.ok) {
           sessionStorage.setItem("edc-quiz-score", String(data.newScore));
           sessionStorage.setItem("edc-quiz-streak", String(data.currentStreak));
-          sessionStorage.setItem(
-            "edc-quiz-feedback",
-            JSON.stringify({
-              result: data,
-              chosenOptionIndex: chosen,
-              question: {
-                text: q.text,
-                type: q.type,
-                options: q.options,
-                questionNumber: q.questionNumber,
-                totalQuestions: q.totalQuestions,
-              },
-              mode: q.mode,
-            })
-          );
-          router.push("/quiz/feedback");
+          // Go directly to next question instead of feedback/interstitial
+          setPhase("loading");
+          loadQuestion();
           return;
         }
         if (res.status === 409 && data?.error === "already_answered") {

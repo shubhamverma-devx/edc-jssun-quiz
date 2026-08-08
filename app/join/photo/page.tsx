@@ -101,7 +101,7 @@ export default function JoinPhotoPage() {
         }
         sessionStorage.setItem("edc-quiz-participant-id", data.participantId);
         sessionStorage.setItem("edc-quiz-session-id", data.sessionId);
-        router.push("/waiting");
+        router.push("/quiz");
         return;
       }
       if (res.status === 409 && data?.error === "no_live_session") {

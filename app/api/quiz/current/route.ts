@@ -71,6 +71,9 @@ export async function GET(request: Request) {
   let questionIndex: number;
   let alreadyAnswered = false;
 
+  // HACK: Force self_paced mode for testing since the admin panel isn't built yet
+  session.mode = "self_paced";
+
   if (session.mode === "self_paced") {
     questionIndex = questions.findIndex((q) => !answeredIds.has(q.id));
     if (questionIndex === -1) {
