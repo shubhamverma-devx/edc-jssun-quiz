@@ -57,8 +57,6 @@ export default function QuizPage() {
   const [selection, setSelection] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [remainingMs, setRemainingMs] = useState(0);
-  const [score, setScore] = useState<number | null>(null);
-  const [streak, setStreak] = useState(0);
 
   const startRef = useRef(0);
   const lockedRef = useRef(false);
@@ -72,13 +70,9 @@ export default function QuizPage() {
       router.replace("/");
       return;
     }
-    const storedScore = sessionStorage.getItem("edc-quiz-score");
-    const storedStreak = sessionStorage.getItem("edc-quiz-streak");
     // sessionStorage is client-only; can't be a useState initializer under SSR.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIds({ pid, sid });
-    if (storedScore) setScore(Number(storedScore));
-    if (storedStreak) setStreak(Number(storedStreak));
   }, [router]);
 
   // All setState calls here happen after the await (async), so this is safe
@@ -105,7 +99,9 @@ export default function QuizPage() {
         return;
       }
       if (data.alreadyAnswered) {
-        router.replace("/quiz/interstitial");
+        // Answered this one already (session-based edge case) — hold on the
+        // waiting screen; the realtime advance listener reloads on change.
+        setPhase("waiting");
         return;
       }
       sessionStorage.setItem("edc-quiz-mode", data.mode);
@@ -164,7 +160,10 @@ export default function QuizPage() {
           return;
         }
         if (res.status === 409 && data?.error === "already_answered") {
-          router.replace("/quiz/interstitial");
+          // Double-submit race — this question is already claimed, so just
+          // load the next unanswered one.
+          setPhase("loading");
+          loadQuestion();
           return;
         }
         if (res.status === 404) {
@@ -180,7 +179,7 @@ export default function QuizPage() {
         setPhase("error");
       }
     },
-    [ids, router]
+    [ids, router, loadQuestion]
   );
 
   // Timer: true remaining time derives from the start timestamp, not from
@@ -281,43 +280,55 @@ export default function QuizPage() {
     <Shell>
       {/* Red edge vignette pulsing with the timer in the last 3 seconds */}
       {timeCritical && <div aria-hidden className="vignette-critical" />}
-      {/* Sticky header: counter · timer ring · score */}
-      <header className="sticky top-0 z-10 -mx-5 flex items-center justify-between bg-background/90 px-5 py-3 backdrop-blur">
-        <span className="w-16 text-[12px] font-semibold text-foreground/45">
-          {question.questionNumber} / {question.totalQuestions}
-        </span>
+      {/* Sticky header: counter · timer ring · brand — score is deliberately
+          hidden from students; ranking stays with the organisers. */}
+      <header className="sticky top-0 z-10 -mx-5 bg-background/90 backdrop-blur">
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="w-16 text-[12px] font-semibold text-foreground/45">
+            Q {question.questionNumber}
+            <span className="text-foreground/25"> / {question.totalQuestions}</span>
+          </span>
 
-        <div className={`relative h-16 w-16 ${fraction <= 0.2 ? "animate-pulse" : ""}`}>
-          <svg viewBox="0 0 60 60" className="h-16 w-16 -rotate-90">
-            <circle cx="30" cy="30" r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
-            <circle
-              cx="30"
-              cy="30"
-              r={RING_RADIUS}
-              fill="none"
-              stroke={timerColor}
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeDasharray={RING_CIRCUMFERENCE}
-              strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
-              style={{
-                transition:
-                  "stroke-dashoffset 100ms linear, stroke 500ms ease",
-              }}
-            />
-          </svg>
-          <span
-            className="absolute inset-0 flex items-center justify-center text-xl font-extrabold"
-            style={{ color: timerColor, transition: "color 500ms ease" }}
-          >
-            {secondsLeft}
+          <div className={`relative h-16 w-16 ${fraction <= 0.2 ? "animate-pulse" : ""}`}>
+            <svg viewBox="0 0 60 60" className="h-16 w-16 -rotate-90">
+              <circle cx="30" cy="30" r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+              <circle
+                cx="30"
+                cy="30"
+                r={RING_RADIUS}
+                fill="none"
+                stroke={timerColor}
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={RING_CIRCUMFERENCE}
+                strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
+                style={{
+                  transition:
+                    "stroke-dashoffset 100ms linear, stroke 500ms ease",
+                }}
+              />
+            </svg>
+            <span
+              className="absolute inset-0 flex items-center justify-center text-xl font-extrabold"
+              style={{ color: timerColor, transition: "color 500ms ease" }}
+            >
+              {secondsLeft}
+            </span>
+          </div>
+
+          <span className="w-16 text-right text-[11px] font-black tracking-[0.25em] text-foreground/30">
+            EDC
           </span>
         </div>
-
-        <span className="w-16 text-right text-[12px] font-semibold text-foreground/45">
-          {score !== null && <span className="block">{score} pts</span>}
-          {streak >= 2 && <span className="block text-award">🔥 x{streak}</span>}
-        </span>
+        {/* Quiz progress under the header */}
+        <div className="h-[3px] w-full bg-white/5">
+          <div
+            className="h-full bg-gradient-to-r from-brand-cyan to-brand-purple transition-[width] duration-500 ease-out"
+            style={{
+              width: `${((question.questionNumber - 1) / Math.max(1, question.totalQuestions)) * 100}%`,
+            }}
+          />
+        </div>
       </header>
 
       {/* Question — card placed from above, options dealt in below */}
@@ -415,7 +426,9 @@ export default function QuizPage() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          // Full-width stack: these options are full sentences — a 2-col
+          // grid makes them unreadable on a 390px viewport.
+          <div className="flex flex-col gap-3">
             {question.options.map((opt, i) => (
               <motion.button
                 key={opt.id}
@@ -423,22 +436,24 @@ export default function QuizPage() {
                 type="button"
                 disabled={submitting}
                 onClick={() => setSelection(i)}
-                className={`rounded-card border p-4 text-left text-[14px] font-semibold leading-snug transition-all duration-200 ${
+                className={`flex items-center gap-3 rounded-card border p-4 text-left text-[14px] font-semibold leading-snug transition-all duration-200 active:scale-[0.99] ${
                   selection === i
-                    ? "scale-[1.02] border-brand-cyan bg-brand-cyan/15"
+                    ? "border-brand-cyan bg-brand-cyan/12 shadow-[0_0_24px_rgba(5,177,222,0.18)]"
                     : selection !== null
-                      ? "border-border-soft bg-surface opacity-70"
+                      ? "border-border-soft bg-surface opacity-60"
                       : "border-border-soft bg-surface"
                 }`}
               >
                 <span
-                  className={`mr-1.5 font-extrabold ${
-                    selection === i ? "text-brand-cyan" : "text-foreground/40"
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[12px] font-extrabold transition-colors duration-200 ${
+                    selection === i
+                      ? "border-brand-cyan bg-brand-cyan text-background"
+                      : "border-border-soft text-foreground/40"
                   }`}
                 >
                   {LETTERS[i]}
                 </span>
-                {opt.text}
+                <span className="flex-1">{opt.text}</span>
               </motion.button>
             ))}
           </div>
@@ -461,6 +476,8 @@ export default function QuizPage() {
               <span />
               <span />
             </span>
+          ) : selection === null ? (
+            "Pick an answer"
           ) : (
             "Lock in answer"
           )}

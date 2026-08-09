@@ -4,19 +4,23 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const BASE_POINTS = 100;
-const MAX_SPEED_BONUS = 50;
-const STREAK_BONUS_PER = 10;
-const MAX_STREAK_BONUS = 50;
 // Allow 50% slack over the question time for network latency; anything
 // beyond that is treated as suspicious.
 const TIMING_SLACK = 1.5;
 const DEFAULT_TIME_SECONDS = 20;
+// Personality-style weighted scoring: each option carries a weight
+// (40/30/20/10, or equal weights when every choice is fine). Fallback when
+// options.weight doesn't exist yet: top pick (correct_option_index) earns
+// TOP_POINTS, any other answer OTHER_POINTS, no answer 0.
+const TOP_POINTS = 40;
+const OTHER_POINTS = 10;
 
 /**
  * Validates and scores an answer entirely server-side (anti-cheat: the
- * client never sees correct_option_index or explanation until this
- * endpoint returns them post-submission).
+ * client never sees option weights or correct_option_index until this
+ * endpoint returns post-submission). Scores are never shown to students —
+ * they exist for the organisers' final ranking (response time is the
+ * tie-break).
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -84,25 +88,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "suspicious_timing" }, { status: 400 });
   }
 
-  const isCorrect =
-    chosenOptionIndex !== null &&
-    chosenOptionIndex === question.correct_option_index;
+  // Weighted scoring: read per-option weights; fall back to the
+  // top-pick/other split if the weight column hasn't been added yet.
+  let weights: number[] | null = null;
+  const { data: optionRows, error: optionsError } = await supabase
+    .from("options")
+    .select("sort_order, weight")
+    .eq("question_id", questionId)
+    .order("sort_order", { ascending: true });
+  if (!optionsError && optionRows?.some((o) => (o.weight ?? 0) > 0)) {
+    weights = optionRows.map((o) => o.weight ?? 0);
+  }
 
-  const base = isCorrect ? BASE_POINTS : 0;
-  const speedBonus = isCorrect
-    ? Math.max(
-        0,
-        Math.min(
-          MAX_SPEED_BONUS,
-          Math.round(MAX_SPEED_BONUS * (1 - responseTimeMs / timeLimitMs))
-        )
-      )
-    : 0;
+  let isCorrect: boolean;
+  let pointsEarned: number;
+  if (chosenOptionIndex === null) {
+    isCorrect = false;
+    pointsEarned = 0;
+  } else if (weights) {
+    const w = weights[chosenOptionIndex] ?? 0;
+    isCorrect = w === Math.max(...weights);
+    pointsEarned = w;
+  } else {
+    isCorrect =
+      question.correct_option_index === null ||
+      chosenOptionIndex === question.correct_option_index;
+    pointsEarned = isCorrect ? TOP_POINTS : OTHER_POINTS;
+  }
   const newStreak = isCorrect ? participant.current_streak + 1 : 0;
-  const streakBonus = isCorrect
-    ? Math.min(STREAK_BONUS_PER * newStreak, MAX_STREAK_BONUS)
-    : 0;
-  const pointsEarned = base + speedBonus + streakBonus;
 
   // Insert first: the unique (participant_id, question_id) constraint is the
   // authoritative guard against double answers — claim the slot before
@@ -142,10 +155,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     isCorrect,
     pointsEarned,
-    breakdown: { base, speedBonus, streakBonus },
     newScore,
     currentStreak: newStreak,
-    correctOptionIndex: question.correct_option_index,
-    explanation: question.explanation,
   });
 }

@@ -9,7 +9,16 @@ import { fadeDown, fadeUp, staggerParent, useEntranceInitial } from "@/lib/motio
 
 // Intentionally basic — reject obvious typos only, not enforce RFC 5322.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-const PHONE_RE = /^[+]?[0-9\-\s]{10,20}$/;
+const PHONE_RE = /^\+?\d{10,15}$/;
+
+// Phone field accepts digits only (plus an optional leading +) — everything
+// else a keyboard or autofill inserts is stripped the moment it lands.
+function sanitizePhone(v: string): string {
+  return v
+    .replace(/[^\d+]/g, "")
+    .replace(/(?!^)\+/g, "")
+    .slice(0, 16);
+}
 
 type Field = "name" | "email" | "phone";
 
@@ -61,6 +70,7 @@ export default function JoinPage() {
     phone: false,
   });
   const [isComposing, setIsComposing] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const canContinue = (Object.keys(isValid) as Field[]).every((f) =>
     isValid[f](values[f])
@@ -75,10 +85,17 @@ export default function JoinPage() {
     if (els.some((el) => !el)) return;
 
     const sync = () => {
+      // Enforce digits-only in the phone field at the DOM level so even
+      // silent autofill writes get cleaned.
+      const rawPhone = phoneRef.current?.value ?? "";
+      const cleanPhone = sanitizePhone(rawPhone);
+      if (phoneRef.current && cleanPhone !== rawPhone) {
+        phoneRef.current.value = cleanPhone;
+      }
       const next = {
         name: nameRef.current?.value ?? "",
         email: emailRef.current?.value ?? "",
-        phone: phoneRef.current?.value ?? "",
+        phone: cleanPhone,
       };
       setValues((prev) =>
         prev.name === next.name &&
@@ -102,14 +119,14 @@ export default function JoinPage() {
     };
   }, []);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (isComposing) return;
+    if (isComposing || checking) return;
     // The DOM is the source of truth — read refs directly, then re-validate.
     const finalValues = {
       name: (nameRef.current?.value ?? "").trim(),
       email: (emailRef.current?.value ?? "").trim(),
-      phone: (phoneRef.current?.value ?? "").trim(),
+      phone: sanitizePhone((phoneRef.current?.value ?? "").trim()),
     };
     setTouched({ name: true, email: true, phone: true });
     if (!(Object.keys(isValid) as Field[]).every((f) => isValid[f](finalValues[f])))
@@ -118,6 +135,31 @@ export default function JoinPage() {
     sessionStorage.setItem("edc-quiz-name", finalValues.name);
     sessionStorage.setItem("edc-quiz-email", finalValues.email);
     sessionStorage.setItem("edc-quiz-phone", finalValues.phone);
+
+    // Returning student? Same email/phone means they already have an entry —
+    // finished goes straight to their result, mid-quiz resumes where they
+    // left off. Lookup failures fall through to the normal photo flow.
+    setChecking(true);
+    try {
+      const res = await fetch("/api/participants/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: finalValues.email,
+          phone: finalValues.phone,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.found) {
+        sessionStorage.setItem("edc-quiz-participant-id", data.participantId);
+        sessionStorage.setItem("edc-quiz-session-id", data.sessionId);
+        router.replace(data.finished ? "/result" : "/quiz");
+        return;
+      }
+    } catch {
+      // network hiccup — continue as a new join
+    }
+    setChecking(false);
     router.push("/join/photo");
   }
 
@@ -175,7 +217,7 @@ export default function JoinPage() {
             variants={fadeUp}
             className="mt-2 text-[13px] leading-relaxed text-foreground/55"
           >
-            We&apos;ll only use email/phone to reach top-3 winners about the
+            We&apos;ll only use email/phone to contact winners about the
             interview.
           </motion.p>
 
@@ -234,8 +276,8 @@ export default function JoinPage() {
               <input
                 ref={phoneRef}
                 type="tel"
-                maxLength={20}
-                placeholder="+91 98765 43210"
+                maxLength={16}
+                placeholder="9876543210"
                 autoComplete="tel"
                 inputMode="tel"
                 enterKeyHint="done"
@@ -249,12 +291,12 @@ export default function JoinPage() {
           <motion.div variants={fadeUp} className="mt-auto pt-10">
             <button
               type="submit"
-              disabled={!canContinue}
+              disabled={!canContinue || checking}
               className={`block w-full rounded-card bg-gradient-to-r from-brand-cyan to-brand-purple py-4 text-center text-[15px] font-bold text-background transition-opacity disabled:opacity-30 ${
-                canContinue ? "sweep-in" : ""
+                canContinue && !checking ? "sweep-in" : ""
               }`}
             >
-              Continue →
+              {checking ? "Checking…" : "Continue →"}
             </button>
           </motion.div>
         </motion.form>

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "@/lib/m";
 import ProgressSteps from "@/components/progress-steps";
 import { uploadToCloudinary } from "@/lib/cloudinary/upload";
+import { compressImage } from "@/lib/compress-image";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { fadeDown, fadeUp, staggerParent, useEntranceInitial } from "@/lib/motion";
 
@@ -73,8 +74,9 @@ export default function JoinPhotoPage() {
     setStage("uploading");
     setProgress(0);
     try {
+      const compressed = await compressImage(photo);
       const uploaded = await uploadToCloudinary(
-        photo,
+        compressed,
         "edc-quiz/participants",
         setProgress
       );
