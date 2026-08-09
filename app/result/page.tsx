@@ -63,10 +63,24 @@ async function generateCard(me: Me): Promise<Blob | null> {
   if (!ctx) return null;
   ctx.scale(CARD_SCALE, CARD_SCALE);
 
-  // Background + faint grid
+  // Deep background with corner vignette
   ctx.fillStyle = "#050508";
   ctx.fillRect(0, 0, CARD_W, CARD_H);
-  ctx.strokeStyle = "rgba(255,255,255,0.035)";
+
+  // Ambient aurora washes (stronger than before, still tasteful)
+  const glow1 = ctx.createRadialGradient(140, 120, 0, 140, 120, 700);
+  glow1.addColorStop(0, "rgba(5,177,222,0.20)");
+  glow1.addColorStop(1, "rgba(5,177,222,0)");
+  ctx.fillStyle = glow1;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  const glow2 = ctx.createRadialGradient(940, 1230, 0, 940, 1230, 700);
+  glow2.addColorStop(0, "rgba(181,133,240,0.20)");
+  glow2.addColorStop(1, "rgba(181,133,240,0)");
+  ctx.fillStyle = glow2;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+  // Faint grid
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
   ctx.lineWidth = 1;
   for (let x = 0; x <= CARD_W; x += 72) {
     ctx.beginPath();
@@ -81,54 +95,92 @@ async function generateCard(me: Me): Promise<Blob | null> {
     ctx.stroke();
   }
 
-  // Ambient glows
-  const glow1 = ctx.createRadialGradient(180, 160, 0, 180, 160, 620);
-  glow1.addColorStop(0, "rgba(5,177,222,0.16)");
-  glow1.addColorStop(1, "rgba(5,177,222,0)");
-  ctx.fillStyle = glow1;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-  const glow2 = ctx.createRadialGradient(920, 1200, 0, 920, 1200, 620);
-  glow2.addColorStop(0, "rgba(181,133,240,0.15)");
-  glow2.addColorStop(1, "rgba(181,133,240,0)");
-  ctx.fillStyle = glow2;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  // Deterministic sparkles (tiny diamonds) in brand colours
+  const SPARKS: Array<[number, number, number, string]> = [
+    [150, 420, 7, "rgba(5,177,222,0.55)"],
+    [935, 350, 9, "rgba(181,133,240,0.5)"],
+    [110, 900, 8, "rgba(181,133,240,0.45)"],
+    [968, 760, 7, "rgba(5,177,222,0.5)"],
+    [220, 1120, 6, "rgba(255,255,255,0.35)"],
+    [890, 1050, 6, "rgba(255,255,255,0.3)"],
+    [320, 300, 5, "rgba(255,255,255,0.3)"],
+    [760, 420, 6, "rgba(5,177,222,0.4)"],
+  ];
+  for (const [sx, sy, sr, colour] of SPARKS) {
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - sr);
+    ctx.quadraticCurveTo(sx, sy, sx + sr, sy);
+    ctx.quadraticCurveTo(sx, sy, sx, sy + sr);
+    ctx.quadraticCurveTo(sx, sy, sx - sr, sy);
+    ctx.quadraticCurveTo(sx, sy, sx, sy - sr);
+    ctx.fill();
+  }
 
-  // Gradient frame
+  // Double frame: gradient outer + hairline inner
   const frameGrad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
   frameGrad.addColorStop(0, "#05B1DE");
   frameGrad.addColorStop(1, "#B585F0");
   ctx.strokeStyle = frameGrad;
-  ctx.lineWidth = 4;
-  roundedRect(ctx, 36, 36, CARD_W - 72, CARD_H - 72, 44);
+  ctx.lineWidth = 5;
+  roundedRect(ctx, 34, 34, CARD_W - 68, CARD_H - 68, 46);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.07)";
+  ctx.lineWidth = 1.5;
+  roundedRect(ctx, 52, 52, CARD_W - 104, CARD_H - 104, 34);
   ctx.stroke();
 
   ctx.textAlign = "center";
 
   // Header
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.font = "600 30px Poppins, sans-serif";
-  ctx.fillText("E D C  ×  J S S  U N I V E R S I T Y  N O I D A", CARD_W / 2, 156);
+  ctx.fillStyle = "rgba(255,255,255,0.48)";
+  ctx.font = "600 28px Poppins, sans-serif";
+  ctx.fillText("E D C  ×  J S S  U N I V E R S I T Y  N O I D A", CARD_W / 2, 152);
 
-  ctx.font = "900 92px Poppins, sans-serif";
-  const titleGrad = ctx.createLinearGradient(200, 0, 880, 0);
+  // Title with a soft cyan glow
+  ctx.save();
+  ctx.shadowColor = "rgba(5,177,222,0.55)";
+  ctx.shadowBlur = 42;
+  ctx.font = "900 94px Poppins, sans-serif";
+  const titleGrad = ctx.createLinearGradient(180, 0, 900, 0);
   titleGrad.addColorStop(0, "#05B1DE");
   titleGrad.addColorStop(1, "#B585F0");
   ctx.fillStyle = titleGrad;
-  ctx.fillText("ORIENTATION QUIZ", CARD_W / 2, 268);
+  ctx.fillText("ORIENTATION QUIZ", CARD_W / 2, 266);
+  ctx.restore();
 
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.font = "700 34px Poppins, sans-serif";
-  ctx.fillText("2 0 2 6", CARD_W / 2, 330);
+  // "2026" flanked by thin gradient rules
+  ctx.fillStyle = "rgba(255,255,255,0.32)";
+  ctx.font = "700 33px Poppins, sans-serif";
+  ctx.fillText("2 0 2 6", CARD_W / 2, 328);
+  ctx.fillStyle = "rgba(5,177,222,0.45)";
+  ctx.fillRect(CARD_W / 2 - 200, 318, 100, 2);
+  ctx.fillStyle = "rgba(181,133,240,0.45)";
+  ctx.fillRect(CARD_W / 2 + 100, 318, 100, 2);
 
-  // Photo (ring + circle clip), initials fallback
+  // Photo: halo glow → gradient ring → faint outer ring, then the circle
   const cx = CARD_W / 2;
-  const cy = 640;
-  const r = 185;
+  const cy = 630;
+  const r = 190;
+  const halo = ctx.createRadialGradient(cx, cy, r - 40, cx, cy, r + 130);
+  halo.addColorStop(0, "rgba(5,177,222,0.28)");
+  halo.addColorStop(0.6, "rgba(181,133,240,0.14)");
+  halo.addColorStop(1, "rgba(181,133,240,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 130, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.save();
   ctx.strokeStyle = frameGrad;
-  ctx.lineWidth = 10;
+  ctx.lineWidth = 11;
   ctx.beginPath();
-  ctx.arc(cx, cy, r + 14, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r + 16, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 34, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 
@@ -152,35 +204,69 @@ async function generateCard(me: Me): Promise<Blob | null> {
   }
   ctx.restore();
 
-  // Name
+  // Name with a soft shadow + gradient accent bar under it
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.6)";
+  ctx.shadowBlur = 16;
   ctx.fillStyle = "#f5f6f8";
-  ctx.font = "800 68px Poppins, sans-serif";
+  ctx.font = "800 70px Poppins, sans-serif";
   const displayName = me.name.length > 22 ? me.name.slice(0, 21) + "…" : me.name;
-  ctx.fillText(displayName, CARD_W / 2, 940);
-
-  // Completed pill
-  const pillW = 420;
-  const pillH = 84;
-  roundedRect(ctx, (CARD_W - pillW) / 2, 986, pillW, pillH, 42);
-  ctx.fillStyle = "rgba(5,177,222,0.12)";
+  ctx.fillText(displayName, CARD_W / 2, 936);
+  ctx.restore();
+  ctx.fillStyle = frameGrad;
+  roundedRect(ctx, CARD_W / 2 - 60, 962, 120, 6, 3);
   ctx.fill();
-  ctx.strokeStyle = "rgba(5,177,222,0.5)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = "#05B1DE";
-  ctx.font = "700 34px Poppins, sans-serif";
-  ctx.fillText("QUIZ COMPLETED ✓", CARD_W / 2, 1040);
+
+  // Completed pill — gradient-filled so it pops
+  const pillW = 430;
+  const pillH = 82;
+  ctx.save();
+  ctx.shadowColor = "rgba(5,177,222,0.4)";
+  ctx.shadowBlur = 26;
+  ctx.fillStyle = frameGrad;
+  roundedRect(ctx, (CARD_W - pillW) / 2, 1004, pillW, pillH, 41);
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = "#050508";
+  ctx.font = "800 33px Poppins, sans-serif";
+  ctx.fillText("QUIZ COMPLETED ✓", CARD_W / 2, 1057);
+
+  // Divider with a centre diamond
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillRect(CARD_W / 2 - 300, 1128, 600, 1.5);
+  ctx.fillStyle = "rgba(181,133,240,0.6)";
+  ctx.beginPath();
+  ctx.moveTo(CARD_W / 2, 1121);
+  ctx.lineTo(CARD_W / 2 + 8, 1129);
+  ctx.lineTo(CARD_W / 2, 1137);
+  ctx.lineTo(CARD_W / 2 - 8, 1129);
+  ctx.closePath();
+  ctx.fill();
 
   // Tagline + Instagram handle + URL
   ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.font = "500 32px Poppins, sans-serif";
-  ctx.fillText("I showed up. I locked in. Your turn.", CARD_W / 2, 1140);
-  ctx.fillStyle = "#05B1DE";
-  ctx.font = "700 32px Poppins, sans-serif";
-  ctx.fillText(`Results drop on ${INSTAGRAM_HANDLE}`, CARD_W / 2, 1206);
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.font = "600 26px Poppins, sans-serif";
-  ctx.fillText(siteHost(), CARD_W / 2, 1262);
+  ctx.font = "italic 500 31px Poppins, sans-serif";
+  ctx.fillText("I showed up. I locked in. Your turn.", CARD_W / 2, 1186);
+
+  // "Results drop on" in white, the handle in gradient — centred together
+  ctx.font = "500 30px Poppins, sans-serif";
+  const prefix = "Results drop on  ";
+  const prefixW = ctx.measureText(prefix).width;
+  ctx.font = "800 32px Poppins, sans-serif";
+  const handleW = ctx.measureText(INSTAGRAM_HANDLE).width;
+  const lineStart = CARD_W / 2 - (prefixW + handleW) / 2;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.font = "500 30px Poppins, sans-serif";
+  ctx.fillText(prefix, lineStart, 1240);
+  ctx.fillStyle = frameGrad;
+  ctx.font = "800 32px Poppins, sans-serif";
+  ctx.fillText(INSTAGRAM_HANDLE, lineStart + prefixW, 1240);
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "rgba(255,255,255,0.32)";
+  ctx.font = "600 25px Poppins, sans-serif";
+  ctx.fillText(siteHost(), CARD_W / 2, 1288);
 
   return new Promise((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/png")
@@ -214,7 +300,18 @@ export default function ResultPage() {
   const [failed, setFailed] = useState(false);
   const [cardUrl, setCardUrl] = useState<string | null>(null);
   const [shareState, setShareState] = useState<"idle" | "saved">("idle");
+  const [handleCopied, setHandleCopied] = useState(false);
   const cardBlobRef = useRef<Blob | null>(null);
+
+  async function copyHandle() {
+    try {
+      await navigator.clipboard.writeText(INSTAGRAM_HANDLE);
+      setHandleCopied(true);
+      window.setTimeout(() => setHandleCopied(false), 2000);
+    } catch {
+      // clipboard unavailable — the handle is visible to type anyway
+    }
+  }
 
   useEffect(() => {
     const pid = sessionStorage.getItem("edc-quiz-participant-id");
@@ -307,12 +404,7 @@ export default function ResultPage() {
             {me ? `You did it, ${me.name.split(" ")[0]}!` : "You did it!"}
           </h1>
           <p className="mt-2 text-[13px] leading-relaxed text-foreground/55">
-            Your answers are in. Winners will be announced on our Instagram —
-            follow{" "}
-            <span className="font-semibold text-brand-cyan">
-              {INSTAGRAM_HANDLE}
-            </span>{" "}
-            so you don&apos;t miss it.
+            Your answers are in. Here&apos;s your entry card —
           </p>
         </motion.div>
 
@@ -335,7 +427,7 @@ export default function ResultPage() {
           )}
         </motion.div>
 
-        <motion.div variants={fadeUp} className="mt-auto pt-8">
+        <motion.div variants={fadeUp} className="mt-5">
           <button
             type="button"
             onClick={share}
@@ -346,20 +438,72 @@ export default function ResultPage() {
           >
             {shareState === "saved" ? "Card saved ✓" : "Share your card"}
           </button>
+        </motion.div>
+
+        {/* What happens next — the winners live on Instagram, so walk them
+            there step by step instead of a vague follow link. */}
+        <motion.div
+          variants={fadeUp}
+          className="mt-4 rounded-card border border-border-soft bg-surface p-5"
+        >
+          <p className="text-center text-[11px] font-bold uppercase tracking-[0.25em] text-brand-purple">
+            What happens next?
+          </p>
+
+          <ol className="mt-4 space-y-3">
+            <NextStep n={1}>
+              Post your card on your <strong className="text-foreground">Instagram story</strong>
+            </NextStep>
+            <NextStep n={2}>
+              Tag{" "}
+              <button
+                type="button"
+                onClick={copyHandle}
+                className="rounded-md border border-brand-cyan/40 bg-brand-cyan/10 px-1.5 py-0.5 font-bold text-brand-cyan active:scale-95"
+              >
+                {handleCopied ? "Copied ✓" : INSTAGRAM_HANDLE}
+              </button>{" "}
+              <span className="text-foreground/40">(tap to copy)</span>
+            </NextStep>
+            <NextStep n={3}>
+              <strong className="text-foreground">Winners are announced there</strong> — not on
+              stage, only on our Instagram
+            </NextStep>
+          </ol>
+
           <a
             href={INSTAGRAM_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-card border border-border-soft bg-surface py-3.5 text-[13px] font-bold text-foreground/85 transition-colors hover:border-brand-purple/50 hover:text-foreground"
+            className="insta-glow mt-5 flex w-full items-center justify-center gap-2.5 rounded-card py-4 text-[15px] font-bold text-white"
+            style={{
+              background:
+                "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)",
+            }}
           >
-            <span aria-hidden>📸</span>
-            Follow {INSTAGRAM_HANDLE} for the results
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2.5" y="2.5" width="19" height="19" rx="5.5" />
+              <circle cx="12" cy="12" r="4.5" />
+              <circle cx="17.6" cy="6.4" r="1.3" fill="currentColor" stroke="none" />
+            </svg>
+            Follow {INSTAGRAM_HANDLE}
           </a>
-          <p className="mt-3 text-center text-[11px] text-foreground/35">
-            Post your card on your story and tag {INSTAGRAM_HANDLE}.
-          </p>
         </motion.div>
+        <div className="pb-2 pt-4" />
       </motion.div>
     </main>
+  );
+}
+
+function NextStep({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-cyan to-brand-purple text-[12px] font-extrabold text-background">
+        {n}
+      </span>
+      <span className="text-[13px] leading-relaxed text-foreground/70">
+        {children}
+      </span>
+    </li>
   );
 }
