@@ -346,6 +346,52 @@ button:not(:disabled):hover {
   }
 }
 
+/* Question-loading skeleton: placeholder bars with a brand-gradient sheen
+   sweeping across, staggered per row so it reads as a wave */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.045);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(5, 177, 222, 0.14) 46%,
+    rgba(181, 133, 240, 0.14) 54%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: skeleton-sweep 1.5s ease-in-out infinite;
+}
+.skeleton-stagger .skeleton:nth-child(2)::after {
+  animation-delay: 0.1s;
+}
+.skeleton-stagger .skeleton:nth-child(3)::after {
+  animation-delay: 0.2s;
+}
+.skeleton-stagger .skeleton:nth-child(4)::after {
+  animation-delay: 0.3s;
+}
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Loading timer: gradient arc spinning in the ring slot */
+.spin-arc {
+  animation: spin-arc 900ms linear infinite;
+}
+@keyframes spin-arc {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Reduced motion: kill every decorative CSS animation, keep end states */
 @media (prefers-reduced-motion: reduce) {
   .shimmer,
@@ -363,7 +409,9 @@ button:not(:disabled):hover {
   .orbit-upright-slower,
   .sonar-ring,
   .aurora,
-  .confetti-piece {
+  .confetti-piece,
+  .skeleton::after,
+  .spin-arc {
     animation: none !important;
   }
   .sonar-ring {

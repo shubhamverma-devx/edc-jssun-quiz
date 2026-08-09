@@ -229,11 +229,70 @@ export default function QuizPage() {
   }, [ids, router, loadQuestion]);
 
   if (!ids || phase === "loading") {
+    // Skeleton mirrors the real question layout (header, timer slot, option
+    // rows) so the swap to the loaded question feels like a reveal, not a
+    // page change. Brand-gradient sheen sweeps the bars in a wave.
     return (
       <Shell>
-        <p className="mt-40 text-center text-[13px] text-foreground/40">
-          Loading question…
-        </p>
+        <header className="sticky top-0 z-10 -mx-5 bg-background/90 backdrop-blur">
+          <div className="flex items-center justify-between px-5 py-3">
+            <span className="w-16">
+              <span className="skeleton block h-3 w-12 rounded-full" />
+            </span>
+            <div className="relative h-16 w-16">
+              <svg viewBox="0 0 60 60" className="spin-arc h-16 w-16">
+                <defs>
+                  <linearGradient id="load-arc" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#05b1de" />
+                    <stop offset="100%" stopColor="#b585f0" />
+                  </linearGradient>
+                </defs>
+                <circle cx="30" cy="30" r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+                <circle
+                  cx="30"
+                  cy="30"
+                  r={RING_RADIUS}
+                  fill="none"
+                  stroke="url(#load-arc)"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={`${RING_CIRCUMFERENCE * 0.28} ${RING_CIRCUMFERENCE * 0.72}`}
+                />
+              </svg>
+            </div>
+            <span className="w-16 text-right text-[11px] font-black tracking-[0.25em] text-foreground/30">
+              EDC
+            </span>
+          </div>
+          <div className="h-[3px] w-full bg-white/5" />
+        </header>
+
+        <div className="mt-6">
+          <span className="skeleton block h-6 w-full rounded-full" />
+          <span className="skeleton mt-2.5 block h-6 w-3/4 rounded-full" />
+        </div>
+
+        <div className="skeleton-stagger mt-6 flex flex-1 flex-col gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="skeleton flex items-center gap-3 rounded-card border border-border-soft p-4"
+            >
+              <span className="h-7 w-7 shrink-0 rounded-full border border-border-soft bg-white/5" />
+              <span
+                className="block h-3.5 rounded-full bg-white/5"
+                style={{ width: `${72 - i * 9}%` }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="sticky bottom-0 -mx-5 bg-background/90 px-5 pb-8 pt-3 backdrop-blur">
+          <div className="skeleton h-[52px] w-full rounded-card border border-border-soft" />
+          <p className="mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground/30">
+            Loading question
+          </p>
+        </div>
       </Shell>
     );
   }
