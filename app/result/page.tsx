@@ -358,17 +358,25 @@ export default function ResultPage() {
       type: "image/png",
     });
     const text = `I just took the EDC Orientation Quiz at JSS University Noida! Results drop on ${INSTAGRAM_HANDLE} — follow to find out.`;
-    try {
-      if (
-        typeof navigator.canShare === "function" &&
-        navigator.canShare({ files: [file] })
-      ) {
-        await navigator.share({ files: [file], text });
-        return;
+
+    // Native share sheet first. iOS Safari can reject files+text together,
+    // so retry with the file alone before ever falling back to download.
+    // A user cancelling the sheet (AbortError) is NOT a fallback case.
+    if (typeof navigator.share === "function") {
+      for (const data of [{ files: [file], text }, { files: [file] }]) {
+        try {
+          if (typeof navigator.canShare !== "function" || navigator.canShare(data)) {
+            await navigator.share(data);
+            return;
+          }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          // this shape failed — try the next one
+        }
       }
-    } catch {
-      // share sheet dismissed — fall through to download
     }
+
+    // Desktop browsers (no file share support): save the PNG instead.
     const a = document.createElement("a");
     a.href = cardUrl ?? URL.createObjectURL(blob);
     a.download = "edc-orientation-quiz.png";
@@ -436,7 +444,9 @@ export default function ResultPage() {
               cardUrl ? "sweep-in" : ""
             }`}
           >
-            {shareState === "saved" ? "Card saved ✓" : "Share your card"}
+            {shareState === "saved"
+              ? "Saved ✓ — post it from your gallery"
+              : "Share your card"}
           </button>
         </motion.div>
 
